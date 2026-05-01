@@ -344,7 +344,16 @@ window.onload = function () {
         }
 
         // 2. Request Camera
-        await initCamera();
+        try {
+            await initCamera();
+            // Force playback on click
+            if (video) {
+                await video.play();
+                console.log("Video playback started via click.");
+            }
+        } catch (e) {
+            console.error("Manual playback start failed:", e);
+        }
         
         hideLoader();
         permissionsGranted = true;
@@ -379,9 +388,15 @@ window.onload = function () {
             });
             video.srcObject = stream;
             video.setAttribute('playsinline', ''); 
-            video.onloadedmetadata = () => {
-                video.play().catch(e => console.error("Auto-play failed:", e));
-            };
+            video.setAttribute('muted', '');
+            video.muted = true; // Extra safety for mobile auto-play
+            
+            // Try playing immediately
+            video.play().catch(e => {
+                console.warn("First play attempt failed, waiting for metadata:", e);
+                video.onloadedmetadata = () => video.play();
+            });
+
             captureBtn.innerHTML = `<i class="fas fa-camera"></i> ${mode === 'registration' ? 'Register Face' : 'Verify Face'}`;
             captureBtn.disabled = false;
         } catch (err) {
@@ -728,12 +743,29 @@ window.onload = function () {
                 return;
             }
 
+            // Diagnostic: check if video is actually producing frames
+            if (video.readyState < 2 || video.paused) {
+                console.warn("Video not ready for capture. Current state:", video.readyState);
+                video.play().catch(() => {});
+                livenessStatus.innerText = "WAITING FOR CAMERA...";
+                return;
+            }
+
             // Capture frame for liveness
             const context = faceCanvas.getContext('2d');
-            faceCanvas.width = video.videoWidth;
-            faceCanvas.height = video.videoHeight;
+            faceCanvas.width = video.videoWidth || 640;
+            faceCanvas.height = video.videoHeight || 480;
             context.drawImage(video, 0, 0, faceCanvas.width, faceCanvas.height);
-            const imageData = faceCanvas.toDataURL('image/jpeg', 0.5); // Lower quality for faster check
+            const imageData = faceCanvas.toDataURL('image/jpeg', 0.5); 
+
+            // If the image is just a black frame (mobile common issue), notify user
+            const pixel = context.getImageData(faceCanvas.width/2, faceCanvas.height/2, 1, 1).data;
+            if (pixel[0] === 0 && pixel[1] === 0 && pixel[2] === 0 && pixel[3] !== 0) {
+                // Potential black frame
+                livenessStatus.innerText = "ADJUSTING CAMERA...";
+            } else {
+                livenessStatus.innerText = isBlinkStep ? "PLEASE BLINK" : "STAY STILL...";
+            }
 
             try {
                 const res = await fetch('/api/liveness_check', {
