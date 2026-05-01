@@ -281,6 +281,125 @@ window.onload = function () {
     // 1. START THE CANVAS ANIMATION FOR THE BACKGROUND
     goMovie();
     
+    // Mode logic - Enhanced detection
+    const registrationForm = document.getElementById("registrationForm");
+    const attendanceForm = document.getElementById("attendanceForm");
+    
+    // Check script attribute first, then form presence, then URL
+    const scriptTag = document.querySelector('script[src*="script.js"][data-page]');
+    const pageAttr = scriptTag ? scriptTag.getAttribute('data-page') : null;
+    
+    const mode = pageAttr || (registrationForm ? 'registration' : (attendanceForm ? 'attendance' : (window.location.pathname.includes('register') ? 'registration' : 'attendance')));
+    const isRegistrationPage = mode === 'registration';
+
+    const mainContainer = document.querySelector(".main-container"); 
+    const messageBox = document.getElementById("message");
+    const loader = document.getElementById("loader");
+    const loaderText = loader ? loader.querySelector('.loader-text') : null;
+    const captureBtn = document.getElementById('capture');
+    const video = document.getElementById('video');
+    const faceCanvas = document.getElementById('canvas');
+    const livenessOverlay = document.getElementById('liveness-overlay');
+    const livenessStatus = document.getElementById('liveness-status');
+    const livenessProgress = document.getElementById('liveness-progress');
+    const livenessIcon = document.getElementById('liveness-icon');
+
+    // INITIAL STATE: Wait for user gesture
+    captureBtn.innerHTML = `<i class="fas fa-play-circle"></i> Enable Camera & Location`;
+    captureBtn.disabled = false;
+    captureBtn.style.background = 'linear-gradient(135deg, #8a2be2 0%, #6a1fcf 100%)';
+
+    let permissionsGranted = false;
+
+    async function handleStartApp() {
+        showLoader("Initializing System...");
+        
+        // 1. Request Geolocation
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const userLat = pos.coords.latitude;
+                    const userLng = pos.coords.longitude;
+                    let inAllowedArea = false;
+                    for (const loc of ALLOWED_LOCATIONS) {
+                        const distance = getDistance(userLat, userLng, loc.lat, loc.lng);
+                        if (distance <= loc.radius) { inAllowedArea = true; break; }
+                    }
+                    if (inAllowedArea) {
+                        messageBox.innerHTML = "✅ Location Verified. Proceed with face check.";
+                        messageBox.classList.add("success");
+                    } else {
+                        messageBox.innerHTML = "❌ Out of allowed area. Attendance disabled.";
+                        messageBox.classList.add("error");
+                        if (submitButton) submitButton.disabled = true;
+                    }
+                    messageBox.style.display = "block";
+                },
+                (err) => {
+                    messageBox.innerHTML = "⚠️ Location blocked. Please enable it in site settings.";
+                    messageBox.style.display = "block";
+                },
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
+        }
+
+        // 2. Request Camera
+        await initCamera();
+        
+        hideLoader();
+        permissionsGranted = true;
+        
+        // Update captureBtn to its actual function
+        captureBtn.removeEventListener('click', handleStartApp);
+        captureBtn.addEventListener('click', handleCaptureClick);
+    }
+
+    captureBtn.addEventListener('click', handleStartApp);
+
+    async function initCamera() {
+        if (!captureBtn || !video) return;
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            let msg = "❌ Camera API not supported.";
+            if (!window.isSecureContext) {
+                msg = "❌ Camera requires HTTPS (Secure Context).";
+            }
+            captureBtn.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${msg}`;
+            captureBtn.disabled = true;
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'user',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                } 
+            });
+            video.srcObject = stream;
+            video.setAttribute('playsinline', ''); 
+            video.onloadedmetadata = () => {
+                video.play().catch(e => console.error("Auto-play failed:", e));
+            };
+            captureBtn.innerHTML = `<i class="fas fa-camera"></i> ${mode === 'registration' ? 'Register Face' : 'Verify Face'}`;
+            captureBtn.disabled = false;
+        } catch (err) {
+            console.error("Camera Error:", err);
+            let msg = "Camera Denied/Unavailable";
+            if (err.name === 'NotAllowedError') {
+                msg = "Camera Blocked. Click Lock Icon 🔒 to Allow.";
+            }
+            captureBtn.innerHTML = `<i class="fas fa-sync"></i> ${msg} (Tap to Retry)`;
+            captureBtn.disabled = false; 
+            captureBtn.onclick = () => {
+                captureBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting...';
+                initCamera();
+            };
+        }
+    }
+
+
     // 2. INJECT DEVICE REQUEST MODAL (Phase 4)
     const modalHtml = `
         <div id="device-request-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
@@ -310,49 +429,54 @@ window.onload = function () {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
     const deviceModal = document.getElementById('device-request-modal');
-    document.getElementById('modal-cancel').addEventListener('click', () => { deviceModal.style.display = 'none'; });
-    document.getElementById('modal-submit').addEventListener('click', async () => {
-        const studentName = document.getElementById('modal-student-name').value.trim();
-        const reason = document.getElementById('modal-reason').value.trim();
-        const msgBox = document.getElementById('modal-msg');
-        const btn = document.getElementById('modal-submit');
+    if (document.getElementById('modal-cancel')) {
+        document.getElementById('modal-cancel').addEventListener('click', () => { deviceModal.style.display = 'none'; });
+    }
+    if (document.getElementById('modal-submit')) {
+        document.getElementById('modal-submit').addEventListener('click', async () => {
+            const studentName = document.getElementById('modal-student-name').value.trim();
+            const reason = document.getElementById('modal-reason').value.trim();
+            const msgBox = document.getElementById('modal-msg');
+            const btn = document.getElementById('modal-submit');
 
-        if (!studentName || !reason) {
-            msgBox.style.display = 'block'; msgBox.style.color = '#ff5252';
-            msgBox.style.background = 'rgba(255,82,82,0.1)'; msgBox.style.border = '1px solid #ff5252';
-            msgBox.innerText = 'Please fill in both fields.';
-            return;
-        }
+            if (!studentName || !reason) {
+                msgBox.style.display = 'block'; msgBox.style.color = '#ff5252';
+                msgBox.style.background = 'rgba(255,82,82,0.1)'; msgBox.style.border = '1px solid #ff5252';
+                msgBox.innerText = 'Please fill in both fields.';
+                return;
+            }
 
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
 
-        try {
-            const deviceId = getOrCreateDeviceId();
-            const deviceInfo = getDeviceInfo();
-            const res = await fetch('/api/request_device_change', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: studentName, newDeviceId: deviceId, newDeviceInfo: deviceInfo, reason })
-            });
-            const result = await res.json();
-            msgBox.style.display = 'block';
-            msgBox.style.color = result.success ? '#4CAF50' : '#ff5252';
-            msgBox.style.background = result.success ? 'rgba(76,175,80,0.1)' : 'rgba(255,82,82,0.1)';
-            msgBox.style.border = `1px solid ${result.success ? '#4CAF50' : '#ff5252'}`;
-            msgBox.innerText = result.message;
-            if (result.success) { setTimeout(() => { deviceModal.style.display = 'none'; }, 3000); }
-        } catch {
-            msgBox.style.display = 'block'; msgBox.innerText = 'Network error. Please try again.';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
-        }
-    });
+            try {
+                const deviceId = getOrCreateDeviceId();
+                const deviceInfo = getDeviceInfo();
+                const res = await fetch('/api/request_device_change', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: studentName, newDeviceId: deviceId, newDeviceInfo: deviceInfo, reason })
+                });
+                const result = await res.json();
+                msgBox.style.display = 'block';
+                msgBox.style.color = result.success ? '#4CAF50' : '#ff5252';
+                msgBox.style.background = result.success ? 'rgba(76,175,80,0.1)' : 'rgba(255,82,82,0.1)';
+                msgBox.style.border = `1px solid ${result.success ? '#4CAF50' : '#ff5252'}`;
+                msgBox.innerText = result.message;
+                if (result.success) { setTimeout(() => { deviceModal.style.display = 'none'; }, 3000); }
+            } catch {
+                msgBox.style.display = 'block'; msgBox.innerText = 'Network error. Please try again.';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+            }
+        });
+    }
 
     // 3. FORM LOGIC STARTS
     const today = new Date();
     const formattedDate = today.toISOString().split("T")[0];
-    document.getElementById("date").value = formattedDate;
+    const dateField = document.getElementById("date");
+    if (dateField) dateField.value = formattedDate;
 
     function getCurrentTime(includeSeconds = false) {
         const now = new Date();
@@ -405,34 +529,41 @@ window.onload = function () {
     // Since the submit logic uses outTime, I'll update the ID to 'inTime' as is common for check-in time.
     // You should check your HTML field IDs. I am sticking to the provided code for now:
       const currentTime = getCurrentTime();
-      document.getElementById("inTime").value = currentTime; 
-      document.getElementById("outTime").value = currentTime; 
+      const inTimeField = document.getElementById("inTime");
+      const outTimeField = document.getElementById("outTime");
+      if (inTimeField) inTimeField.value = currentTime; 
+      if (outTimeField) outTimeField.value = currentTime; 
 
+    if (registrationForm) {
+        registrationForm.addEventListener("submit", (e) => e.preventDefault());
+    }
     
-     // Assumed correction
+    const submitButton = attendanceForm ? attendanceForm.querySelector('button[type="submit"]') : null; 
 
-    // ⭐ 
-    const mainContainer = document.querySelector(".main-container"); 
-    const messageBox = document.getElementById("message");
-    const loader = document.getElementById("loader");
-    const loaderText = loader ? loader.querySelector('.loader-text') : null;
-    const attendanceForm = document.getElementById("attendanceForm");
-    const submitButton = attendanceForm ? attendanceForm.querySelector('button[type="submit"]') : null; // Check for form/button
-
-    // Mode logic
-    const mode = window.location.pathname.includes('register') ? 'registration' : 'attendance';
-    const isRegistrationPage = mode === 'registration';
-
-    let lastVerifiedConfidence = 1.0; // Store confidence for submission
-    const captureBtn = document.getElementById('capture');
+    let lastVerifiedConfidence = 1.0; 
 
     // Check if critical elements exist before proceeding with logic that relies on them
-    if (!attendanceForm || !submitButton || !messageBox || !mainContainer || !loader || !loaderText) {
-        console.error("Critical HTML elements (form, submit button, messageBox, loader, mainContainer) are missing. Form logic disabled.");
-        return; // Exit if elements are missing to prevent errors
+    if (!messageBox || !mainContainer || !loader || !loaderText || !captureBtn) {
+        console.error("Critical UI elements (messageBox, loader, captureBtn) are missing. Logic disabled.");
+        return;
     }
 
-    submitButton.disabled = true;
+    if (submitButton) submitButton.disabled = true;
+
+    // 🚀 NEW: PROACTIVE SECURE CONTEXT CHECK 🚀
+    if (!window.isSecureContext) {
+        const httpsWarning = document.createElement('div');
+        httpsWarning.style.cssText = "background:#ff5252; color:white; padding:15px; text-align:center; position:fixed; top:0; left:0; right:0; z-index:10000; font-weight:bold; box-shadow:0 4px 10px rgba(0,0,0,0.3); font-family:sans-serif;";
+        httpsWarning.innerHTML = `
+            <i class="fas fa-lock-open"></i> INSECURE CONNECTION DETECTED<br>
+            <span style="font-weight:normal; font-size:0.85rem;">
+                Mobile browsers block Camera & Location on HTTP. 
+                Please use <strong>HTTPS</strong> (e.g. https://...) to fix this.
+            </span>
+        `;
+        document.body.prepend(httpsWarning);
+        document.body.style.paddingTop = "60px";
+    }
 
     const savedUser = JSON.parse(localStorage.getItem("userData"));
     const lastSubmission = JSON.parse(localStorage.getItem("lastSubmission"));
@@ -469,8 +600,10 @@ window.onload = function () {
          if (formZoomWrap) {
              formZoomWrap.style.display = "none";
          }
-         attendanceForm.style.display = "none";
-         hideLoader(); // Remove the loader and show the success message and the main container
+         if (attendanceForm) {
+             attendanceForm.style.display = "none";
+         }
+         hideLoader(); 
          return;
      }
 
@@ -521,135 +654,53 @@ window.onload = function () {
     
     
     // ====== ASK LOCATION ON PAGE LOAD (IMPROVED ERROR HANDLING) ======
-    if (navigator.geolocation) {
-        showLoader("Checking your location..."); // 👈 
+    // (Location request moved to handleStartApp for user gesture compliance)
 
-        messageBox.style.display = "none";
-        messageBox.classList.remove("success", "error");
-
-
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                hideLoader(); // 👈 On success, remove the loader and show the form.
-                const userLat = pos.coords.latitude;
-                const userLng = pos.coords.longitude;
-
-                let inAllowedArea = false;
-
-                for (const loc of ALLOWED_LOCATIONS) {
-                    const distance = getDistance(userLat, userLng, loc.lat, loc.lng);
-                    if (distance <= loc.radius) {
-                        inAllowedArea = true;
-                        break;
-                    }
-                }
-
-                if (inAllowedArea) {
-                    messageBox.innerText = "✅ You are in the allowed area. Please verify your face to submit.";
-                    messageBox.style.display = "block";
-                    messageBox.classList.add("success");
-                    // submitButton.disabled = false; // Don't enable yet, wait for face verification
-                } else {
-                    messageBox.innerText = "❌ You are not in any allowed area. Submission disabled.";
-                    messageBox.style.display = "block";
-                    messageBox.classList.add("error");
-                    submitButton.disabled = true;
-                }
-            },
-            (err) => {
-                hideLoader(); 
-                
-                let errorText = "⚠️ Location access denied. Using standard verification.";
-
-                // Geolocation API Error Codes
-                if (err.code === err.PERMISSION_DENIED) {
-                    errorText = "⚠️ Location Denied: System will proceed without GPS verification. Ensure you are on-site.";
-                } else if (err.code === err.POSITION_UNAVAILABLE) {
-                    errorText = "⚠️ Location Unavailable: Proceeding with identity verification only.";
-                } 
-
-                messageBox.innerText = errorText;
-                messageBox.style.display = "block";
-                messageBox.classList.add("warning");
-                
-                // Allow face verification even if location fails
-                // submitButton.disabled is still handled by face verification success
-            },
-            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
-    } else {
-        messageBox.innerText =
-            "⚠️ Geolocation is not supported by this browser.";
-        messageBox.style.display = "block";
-        messageBox.classList.add("error");
-        
-        // Geolocation is not supported, so remove the loader immediately and show the form.
-        hideLoader(); 
-    }
 
 
     // ====== MANUAL SUBMIT AFTER LOCATION ALLOWED ======
-    attendanceForm.addEventListener("submit", function (e) {
-        e.preventDefault();
+    if (attendanceForm) {
+        attendanceForm.addEventListener("submit", function (e) {
+            e.preventDefault();
 
-        if (submitButton.disabled) {
-            alert("❌ Submission is disabled. Check location message.");
-            return;
-        }
+            if (submitButton.disabled) {
+                alert("❌ Submission is disabled. Check location message.");
+                return;
+            }
 
-        const name = document.getElementById("name").value.trim();
-        const mobile = document.getElementById("mobile").value.trim();
-        const email = document.getElementById("email").value.trim();
-        const date = document.getElementById("date").value;
-        const inTime = document.getElementById("inTime").value.trim();
-        const outTime = document.getElementById("outTime").value.trim();
-        const topic = document.getElementById("topic").value.trim();
-        const status = "Present"; // Simplified status
+            const name = document.getElementById("name").value.trim();
+            const mobile = document.getElementById("mobile").value.trim();
+            const email = document.getElementById("email").value.trim();
+            const date = document.getElementById("date").value;
+            const inTime = document.getElementById("inTime").value.trim();
+            const outTime = document.getElementById("outTime").value.trim();
+            const topic = document.getElementById("topic").value.trim();
+            const status = "Present"; // Simplified status
 
-        const validationResult = validateForm(name, mobile, email, inTime, topic);
+            const validationResult = validateForm(name, mobile, email, inTime, topic);
 
-        if (validationResult !== true) {
-            messageBox.innerText = validationResult;
-            messageBox.style.display = "block";
-            messageBox.classList.remove("success");
-            messageBox.classList.add("error");
-            return; 
-        }
-        
-        // Clear previous error/success state
-        messageBox.classList.remove("error", "success");
+            if (validationResult !== true) {
+                messageBox.innerText = validationResult;
+                messageBox.style.display = "block";
+                messageBox.classList.remove("success");
+                messageBox.classList.add("error");
+                return; 
+            }
+            
+            // Clear previous error/success state
+            messageBox.classList.remove("error", "success");
 
-        const deviceId = getOrCreateDeviceId();
-        const confidence = lastVerifiedConfidence;
+            const deviceId = getOrCreateDeviceId();
+            const confidence = lastVerifiedConfidence;
 
-        submitAttendance({ name, mobile, email, date, inTime, outTime, topic, status, deviceId, confidence });
-    });
-
-    // =====================
-    // Camera Integration & Liveness (Phase 8B)
-    // =====================
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const livenessOverlay = document.getElementById('liveness-overlay');
-    const livenessStatus = document.getElementById('liveness-status');
-    const livenessProgress = document.getElementById('liveness-progress');
-    const livenessIcon = document.getElementById('liveness-icon');
-    
-    let isLivenessActive = false;
-    let livenessInterval = null;
-    let livenessAttempts = 0;
-    const MAX_LIVENESS_ATTEMPTS = 15; // ~12 seconds total
-
-    // Start camera when page loads
-    navigator.mediaDevices.getUserMedia({ video: true })
-        .then((stream) => {
-            video.srcObject = stream;
-        })
-        .catch((err) => {
-            console.error("Camera Error:", err);
-            captureBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Camera Unavailable';
-            captureBtn.disabled = true;
+            submitAttendance({ name, mobile, email, date, inTime, outTime, topic, status, deviceId, confidence });
         });
+    }
+
+
+
+    // (initCamera was moved to top of onload)
+
 
     function startLivenessSequence() {
         if (isLivenessActive) return;
@@ -665,22 +716,24 @@ window.onload = function () {
         captureBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking Liveness...';
         captureBtn.disabled = true;
 
-        livenessInterval = setInterval(async () => {
+        async function checkLiveness() {
+            if (!isLivenessActive) return;
+
             livenessAttempts++;
             const progress = (livenessAttempts / MAX_LIVENESS_ATTEMPTS) * 100;
             livenessProgress.style.width = `${progress}%`;
 
             if (livenessAttempts > MAX_LIVENESS_ATTEMPTS) {
-                stopLivenessSequence("Liveness timeout. Try again.");
+                stopLivenessSequence("Liveness timeout. Please look at the camera and blink clearly.");
                 return;
             }
 
             // Capture frame for liveness
-            const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = canvas.toDataURL('image/jpeg', 0.6); // Lower quality for faster check
+            const context = faceCanvas.getContext('2d');
+            faceCanvas.width = video.videoWidth;
+            faceCanvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, faceCanvas.width, faceCanvas.height);
+            const imageData = faceCanvas.toDataURL('image/jpeg', 0.5); // Lower quality for faster check
 
             try {
                 const res = await fetch('/api/liveness_check', {
@@ -697,17 +750,28 @@ window.onload = function () {
                     
                     setTimeout(() => {
                         stopLivenessSequence(null, true);
-                        processFaceVerification(); // Proceed to actual verify/register
+                        processFaceVerification(); 
                     }, 800);
+                    return; // Stop recursion
                 }
             } catch (err) {
-                console.error("Liveness error:", err);
+                console.error("Liveness request error:", err);
             }
-        }, 800);
+
+            // Recursive call for next frame
+            if (isLivenessActive) {
+                livenessInterval = setTimeout(checkLiveness, 600);
+            }
+        }
+
+        checkLiveness();
     }
 
     function stopLivenessSequence(errorMsg, success = false) {
-        clearInterval(livenessInterval);
+        if (livenessInterval) {
+            clearTimeout(livenessInterval);
+            livenessInterval = null;
+        }
         isLivenessActive = false;
         
         if (!success) {
@@ -724,8 +788,8 @@ window.onload = function () {
         }
     }
 
-    // Capture button click handler
-    captureBtn.addEventListener('click', () => {
+    // Split click handler into a separate function for clean event management
+    function handleCaptureClick() {
         const nameInput = document.getElementById("name");
         
         // Use session name if available (from auth portal)
@@ -736,26 +800,40 @@ window.onload = function () {
 
         const name = nameInput.value.trim();
 
-        if (mode === 'registration' && !name) {
-            alert("Please enter your name before registering your face.");
-            return;
+        const mobile = document.getElementById("mobile").value.trim();
+        const email = document.getElementById("email").value.trim();
+
+        if (mode === 'registration') {
+            if (!name || !mobile || !email) {
+                alert("Please enter your Name, Mobile, and Email before registering your face.");
+                return;
+            }
+            // Simple regex validation
+            if (!/^\d{10}$/.test(mobile)) {
+                alert("Mobile number must be 10 digits.");
+                return;
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                alert("Please enter a valid email address.");
+                return;
+            }
         }
 
         // Phase 8B: Start liveness check before processing
         startLivenessSequence();
-    });
+    }
 
     function processFaceVerification() {
         const nameInput = document.getElementById("name");
         const name = nameInput.value.trim();
 
-        const context = canvas.getContext('2d');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const context = faceCanvas.getContext('2d');
+        faceCanvas.width = video.videoWidth;
+        faceCanvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, faceCanvas.width, faceCanvas.height);
         
         // Get image data
-        const imageData = canvas.toDataURL('image/jpeg');
+        const imageData = faceCanvas.toDataURL('image/jpeg');
         
         const endpoint = mode === 'registration' ? '/register_face' : '/verify_face';
         const deviceId = getOrCreateDeviceId();
@@ -788,8 +866,8 @@ window.onload = function () {
                     captureBtn.innerHTML = `<i class="fas fa-check"></i> Registered!`;
                     captureBtn.style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
                     alert("Face registered successfully! You can now mark attendance.");
-                    // Switch back to attendance mode
-                    attendanceModeBtn.click();
+                    // Redirect to home page (attendance mode)
+                    window.location.href = "/";
                 } else {
                     lastVerifiedConfidence = result.confidence || 1.0;
                     const matchText = result.match_percentage ? ` (${result.match_percentage}%)` : '';
@@ -818,17 +896,22 @@ window.onload = function () {
                 captureBtn.innerHTML = `<i class="fas fa-redo"></i> ${mode === 'registration' ? 'Retry Registration' : 'Retry Verification'}`;
                 
                 // Phase 4: Show device request modal instead of plain error
-                if (result.message && result.message.includes("Unauthorized Device")) {
+                const isUnauthorized = result.message && (
+                    result.message.toLowerCase().includes("unauthorized device") || 
+                    result.message.toLowerCase().includes("security alert")
+                );
+
+                if (isUnauthorized) {
                     const modal = document.getElementById('device-request-modal');
                     if (modal) { modal.style.display = 'flex'; }
-                    messageBox.innerHTML = `⚠️ <strong style="color: #ff5252;">SECURITY ALERT:</strong> Unauthorized device. <span style="color:#8a2be2; cursor:pointer; text-decoration:underline;" onclick="document.getElementById('device-request-modal').style.display='flex'">Request device change →</span>`;
+                    messageBox.innerHTML = `⚠️ <strong style="color: #ff5252;">SECURITY ALERT:</strong> Unauthorized device detected. <span style="color:#8a2be2; cursor:pointer; text-decoration:underline;" onclick="document.getElementById('device-request-modal').style.display='flex'">Request device change →</span>`;
                 } else {
                     messageBox.innerText = `❌ ${mode === 'registration' ? 'Registration' : 'Verification'} Failed: ` + (result.message || "Unknown error") + matchText;
                 }
                 
                 messageBox.style.display = "block";
                 messageBox.classList.add("error");
-                submitButton.disabled = true;
+                if (submitButton) submitButton.disabled = true;
             }
         })
         .catch(err => {
