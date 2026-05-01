@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard | Codeline.Ai</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="admin.css">
+    <!-- Chart.js for Phase 8A Analytics Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <canvas id="nokey"></canvas>
+
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-section">
+                <img src="1678044024774.jfif" alt="Logo">
+                <h2>Codeline.Ai</h2>
+            </div>
+            
+            <ul class="nav-links">
+                <li class="nav-item">
+                    <a class="nav-link active" data-section="dashboard">
+                        <i class="fas fa-th-large"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="students">
+                        <i class="fas fa-user-graduate"></i>
+                        <span>Students</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="register-student">
+                        <i class="fas fa-user-plus"></i>
+                        <span>Add Student</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="logs">
+                        <i class="fas fa-clipboard-list"></i>
+                        <span>Attendance Logs</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="analytics">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>Analytics</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="devices">
+                        <i class="fas fa-mobile-alt"></i>
+                        <span>Device Security</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-section="device-requests" id="nav-device-requests">
+                        <i class="fas fa-bell"></i>
+                        <span>Device Requests</span>
+                        <span id="pending-badge" class="nav-badge" style="display:none;">0</span>
+                    </a>
+                </li>
+                <li class="nav-item" style="margin-top: auto;">
+                    <a href="/api/admin/logout" class="nav-link">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </a>
+                </li>
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <h1 id="section-title">Overview</h1>
+                <div class="header-actions" style="display: flex; gap: 1rem;">
+                    <button id="sync-google" class="action-btn" style="background: rgba(138, 43, 226, 0.2); color: var(--accent); border: 1px solid var(--accent);">
+                        <i class="fas fa-cloud-download-alt"></i> Sync from Google
+                    </button>
+                    <button id="refresh-data" class="action-btn" style="background: var(--card-bg); color: white;">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </header>
+
+            <!-- Dashboard Overview -->
+            <section id="dashboard" class="dashboard-section active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Students</h3>
+                            <p id="stat-total-students">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+                        <div class="stat-info">
+                            <h3>Today's Attendance</h3>
+                            <p id="stat-today-attendance">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fas fa-history"></i></div>
+                        <div class="stat-info">
+                            <h3>Total Records</h3>
+                            <p id="stat-total-records">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="cursor:pointer;" onclick="document.querySelector('[data-section=device-requests]').click()">
+                        <div class="stat-icon" style="background: rgba(255,82,82,0.15);"><i class="fas fa-bell" style="color:#ff5252;"></i></div>
+                        <div class="stat-info">
+                            <h3>Pending Requests</h3>
+                            <p id="stat-pending-requests">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>Recent Activity</h2>
+                    </div>
+                    <table id="recent-activity-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>In Time</th>
+                                <th>Out Time</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-activity-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Students Management -->
+            <section id="students" class="dashboard-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>Registered Students</h2>
+                        <div class="search-box" style="position: relative;">
+                            <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                            <input type="text" id="student-search" placeholder="Search students..." style="background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; padding: 8px 12px 8px 35px; color: white; outline: none;">
+                        </div>
+                    </div>
+                    <table id="students-table">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Registration Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="students-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Detailed Logs -->
+            <section id="logs" class="dashboard-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>Full Attendance History</h2>
+                        <button id="download-logs" class="action-btn" style="background: var(--primary); color: black; font-weight: 600;">
+                            <i class="fas fa-file-export"></i> Export CSV
+                        </button>
+                    </div>
+                    <table id="logs-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Date</th>
+                                <th>In Time</th>
+                                <th>Out Time</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Analytics Dashboard -->
+            <section id="analytics" class="dashboard-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>Student Attendance Analytics</h2>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label for="analytics-month" style="color: var(--text-muted);">Select Month:</label>
+                            <input type="month" id="analytics-month" style="background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; padding: 8px; color: white; outline: none; font-family: 'Poppins', sans-serif;">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                        <div style="background: rgba(138, 43, 226, 0.1); border: 1px solid rgba(138, 43, 226, 0.3); border-radius: 8px; padding: 15px; flex: 1;">
+                            <h3 style="margin: 0; color: var(--text-muted); font-size: 0.9rem;">Total Working Days</h3>
+                            <p id="analytics-working-days" style="margin: 5px 0 0; font-size: 1.5rem; font-weight: 600; color: white;">0</p>
+                        </div>
+                    </div>
+
+                    <!-- Phase 8A: Charts -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px;">
+                        <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: 12px; padding: 20px;">
+                            <h3 style="margin: 0 0 12px; font-size: 0.95rem; color: var(--text-muted);"><i class="fas fa-chart-bar" style="color: var(--accent);"></i> Attendance % by Student</h3>
+                            <canvas id="chart-bar" height="200"></canvas>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: 12px; padding: 20px;">
+                            <h3 style="margin: 0 0 12px; font-size: 0.95rem; color: var(--text-muted);"><i class="fas fa-chart-line" style="color: #4CAF50;"></i> Daily Attendance Count</h3>
+                            <canvas id="chart-line" height="200"></canvas>
+                        </div>
+                    </div>
+
+                    <table id="analytics-table">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Present Days</th>
+                                <th>Absent Days</th>
+                                <th>Attendance %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analytics-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Device Management -->
+            <section id="devices" class="dashboard-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>Device Bindings & Security</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Resetting a device allows the student to register with a new device on their next verification/registration.</p>
+                    </div>
+                    <table id="devices-table">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Bound Device ID</th>
+                                <th>Device Details</th>
+                                <th>Security Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devices-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Phase 4: Device Change Requests -->
+            <section id="device-requests" class="dashboard-section">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2><i class="fas fa-bell" style="color:#ff5252;"></i> Device Change Requests</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Students who scanned on an unrecognized device can request a device change here.</p>
+                    </div>
+                    <table id="device-requests-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Submitted At</th>
+                                <th>New Device</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="device-requests-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Phase 5: Register Student from Admin -->
+            <section id="register-student" class="dashboard-section">
+                <div class="table-container" style="max-width: 520px;">
+                    <div class="table-header">
+                        <h2><i class="fas fa-user-plus" style="color: var(--accent);"></i> Register New Student</h2>
+                    </div>
+                    <form id="admin-reg-form" style="display: flex; flex-direction: column; gap: 16px; padding: 8px 0;">
+                        <div>
+                            <label style="color:var(--text-muted); font-size:0.9rem; display:block; margin-bottom:6px;">Full Name</label>
+                            <input type="text" id="reg-name" placeholder="e.g. Rohit Sharma" required style="width:100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; padding: 10px 14px; color: white; font-family: 'Poppins', sans-serif; outline:none; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="color:var(--text-muted); font-size:0.9rem; display:block; margin-bottom:6px;">Email Address</label>
+                            <input type="email" id="reg-email" placeholder="student@example.com" required style="width:100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; padding: 10px 14px; color: white; font-family: 'Poppins', sans-serif; outline:none; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="color:var(--text-muted); font-size:0.9rem; display:block; margin-bottom:6px;">Temporary Password <span style="color:var(--text-muted); font-size:0.8rem;">(student should change later)</span></label>
+                            <input type="password" id="reg-password" placeholder="Min 6 characters" style="width:100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; padding: 10px 14px; color: white; font-family: 'Poppins', sans-serif; outline:none; box-sizing:border-box;">
+                        </div>
+                        <div id="admin-reg-msg" style="display:none; padding: 10px 14px; border-radius: 8px; font-size: 0.9rem;"></div>
+                        <button type="submit" id="admin-reg-btn" class="action-btn" style="background: var(--accent); color: white; font-weight: 600; padding: 12px; border-radius: 10px; border: none; cursor: pointer; font-family: 'Poppins', sans-serif; font-size: 1rem;">
+                            <i class="fas fa-user-plus"></i> Register Student
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="admin-loader" class="loader-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>

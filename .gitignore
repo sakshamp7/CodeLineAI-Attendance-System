@@ -1,0 +1,27 @@
+# ============================================
+# .gitignore - DO NOT REMOVE
+# ============================================
+
+# ⚠️ Secret Config - NEVER commit this!
+.env
+
+# Database files (local data)
+instance/
+*.db
+*.db-journal
+
+# Face encodings & images (personal data)
+encodings.pkl
+attendance.json
+devices.json
+faces/
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# OS files
+.DS_Store
+Thumbs.db

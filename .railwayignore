@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+instance/
+faces/
+encodings.pkl
+attendance.json
+devices.json
+database.db
+*.jfif
+*.jpg
+*.png

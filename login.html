@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login | Codeline.Ai</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        :root {
+            --accent: #8a2be2;
+            --accent-glow: rgba(138, 43, 226, 0.4);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #ffffff;
+            --text-muted: #a0a0a0;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0a0a1a;
+            font-family: 'Poppins', sans-serif;
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        #nokey {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+
+        .login-container {
+            width: 90%;
+            max-width: 440px;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+        }
+
+        .login-logo {
+            width: 70px;
+            height: 70px;
+            border-radius: 18px;
+            margin-bottom: 20px;
+            border: 2px solid var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .tabs {
+            display: flex;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 30px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .form-group {
+            position: relative;
+            margin-bottom: 18px;
+            text-align: left;
+        }
+
+        .form-group i {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--accent);
+            font-size: 0.9rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 14px 16px 14px 44px;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        .form-group input:focus {
+            border-color: var(--accent);
+            background: rgba(255,255,255,0.08);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background: var(--accent);
+            color: #fff;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+            font-family: inherit;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px var(--accent-glow);
+            filter: brightness(1.1);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 24px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: #fff;
+        }
+
+        #msg-box {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            display: none;
+        }
+
+        .msg-error { background: rgba(255, 77, 77, 0.1); color: #ff4d4d; border: 1px solid rgba(255, 77, 77, 0.2); }
+        .msg-success { background: rgba(76, 175, 80, 0.1); color: #4CAF50; border: 1px solid rgba(76, 175, 80, 0.2); }
+    </style>
+</head>
+<body>
+    <canvas id="nokey"></canvas>
+
+    <div class="login-container">
+        <div class="login-card">
+            <img src="1678044024774.jfif" alt="Logo" class="login-logo">
+            <h1 id="form-title" style="font-size: 1.5rem; margin-bottom: 8px;">Portal Login</h1>
+            <p id="form-subtitle" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 24px;">Enter your credentials to access the system</p>
+
+            <div class="tabs">
+                <button type="button" class="tab-btn active" onclick="switchTab('student-login')">Student</button>
+                <button type="button" class="tab-btn" onclick="switchTab('admin-login')">Admin</button>
+                <button type="button" class="tab-btn" onclick="switchTab('register')">New Account</button>
+            </div>
+
+            <form id="authForm">
+                <div id="name-field" class="form-group" style="display:none;">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="name" placeholder="Full Name">
+                </div>
+                
+                <div id="email-field" class="form-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="email" placeholder="Email Address">
+                </div>
+
+                <div id="password-field" class="form-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="password" placeholder="Password" required>
+                </div>
+
+                <button type="submit" id="submit-btn" class="login-btn">Sign In</button>
+            </form>
+
+            <div id="msg-box"></div>
+
+            <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to Attendance</a>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'student-login';
+
+        function switchTab(tab) {
+            currentTab = tab;
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(t => t.classList.remove('active'));
+            
+            // UI Updates
+            const nameField = document.getElementById('name-field');
+            const emailField = document.getElementById('email-field');
+            const passwordField = document.getElementById('password-field');
+            const submitBtn = document.getElementById('submit-btn');
+            const title = document.getElementById('form-title');
+            
+            document.getElementById('msg-box').style.display = 'none';
+
+            if (tab === 'student-login') {
+                tabs[0].classList.add('active');
+                nameField.style.display = 'none';
+                emailField.style.display = 'block';
+                title.innerText = 'Student Login';
+                submitBtn.innerText = 'Sign In';
+            } else if (tab === 'admin-login') {
+                tabs[1].classList.add('active');
+                nameField.style.display = 'none';
+                emailField.style.display = 'none';
+                title.innerText = 'Admin Access';
+                submitBtn.innerText = 'Authenticate';
+            } else {
+                tabs[2].classList.add('active');
+                nameField.style.display = 'block';
+                emailField.style.display = 'block';
+                title.innerText = 'Create Account';
+                submitBtn.innerText = 'Register Now';
+            }
+        }
+
+        // Background animation (existing)
+        const canvas = document.getElementById('nokey');
+        const ctx = canvas.getContext('2d');
+        let can_w, can_h;
+        const BALL_NUM = 40;
+        let balls = [];
+
+        function initCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            can_w = canvas.width;
+            can_h = canvas.height;
+        }
+
+        function getRandomBall() {
+            return {
+                x: Math.random() * can_w,
+                y: Math.random() * can_h,
+                vx: (Math.random() - 0.5) * 1.5,
+                vy: (Math.random() - 0.5) * 1.5,
+                r: 2,
+                alpha: Math.random(),
+                phase: Math.random() * 10
+            };
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, can_w, can_h);
+            balls.forEach(b => {
+                ctx.fillStyle = `rgba(138, 43, 226, ${b.alpha * 0.5})`;
+                ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+                b.x += b.vx; b.y += b.vy;
+                if (b.x < 0 || b.x > can_w) b.vx *= -1;
+                if (b.y < 0 || b.y > can_h) b.vy *= -1;
+                b.phase += 0.01; b.alpha = Math.abs(Math.cos(b.phase));
+            });
+            requestAnimationFrame(render);
+        }
+
+        initCanvas();
+        window.addEventListener('resize', initCanvas);
+        for (let i = 0; i < BALL_NUM; i++) balls.push(getRandomBall());
+        render();
+
+        // Auth Logic
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msgBox = document.getElementById('msg-box');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            msgBox.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            let endpoint = '';
+            let payload = { password };
+
+            if (currentTab === 'admin-login') {
+                endpoint = '/api/admin/login';
+            } else if (currentTab === 'student-login') {
+                endpoint = '/api/login';
+                payload.email = email;
+            } else {
+                endpoint = '/api/register';
+                payload.email = email;
+                payload.name = name;
+            }
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    msgBox.className = 'msg-success';
+                    msgBox.style.display = 'block';
+                    msgBox.innerText = result.message || 'Success!';
+                    
+                    if (currentTab === 'admin-login') {
+                        setTimeout(() => window.location.href = '/admin', 800);
+                    } else if (currentTab === 'student-login') {
+                        // Store student info for auto-fill
+                        localStorage.setItem('userData', JSON.stringify({ name: result.name, email: email }));
+                        setTimeout(() => window.location.href = '/', 1000);
+                    } else {
+                        // Switch to login tab after register
+                        setTimeout(() => switchTab('student-login'), 2000);
+                    }
+                } else {
+                    msgBox.className = 'msg-error';
+                    msgBox.style.display = 'block';
+                    msgBox.innerText = result.message || 'Authentication failed.';
+                }
+            } catch (err) {
+                msgBox.className = 'msg-error';
+                msgBox.style.display = 'block';
+                msgBox.innerText = 'Connection error. Please try again.';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = currentTab === 'register' ? 'Register Now' : 'Sign In';
+            }
+        });
+    </script>
+</body>
+</html>
+</body>
+</html>
