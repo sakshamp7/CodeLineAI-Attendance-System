@@ -80,8 +80,9 @@ def register_face():
                 # If they are updating their OWN face, that's fine (handled by existing logic below)
 
         # ── Save face image ───────────────────────────────────────
-        os.makedirs("faces", exist_ok=True)
-        cv2.imwrite(os.path.join("faces", f"{name}.jpg"), img)
+        faces_dir = os.path.join("instance", "faces")
+        os.makedirs(faces_dir, exist_ok=True)
+        cv2.imwrite(os.path.join(faces_dir, f"{name}.jpg"), img)
 
         # ── Upsert student record ────────────────────────────────
         existing = Student.query.filter(Student.name.ilike(name)).first()

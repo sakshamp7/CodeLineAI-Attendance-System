@@ -81,7 +81,7 @@ def admin_students():
 
     result = []
     for s in Student.query.all():
-        img_path = os.path.join("faces", f"{s.name}.jpg")
+        img_path = os.path.join("instance", "faces", f"{s.name}.jpg")
         reg_date = (
             datetime.fromtimestamp(os.path.getctime(img_path)).strftime("%Y-%m-%d")
             if os.path.exists(img_path) else "N/A"
@@ -104,7 +104,7 @@ def delete_student():
         db.session.delete(student)
         db.session.commit()
 
-        img_path = os.path.join("faces", f"{name}.jpg")
+        img_path = os.path.join("instance", "faces", f"{name}.jpg")
         if os.path.exists(img_path):
             os.remove(img_path)
 
