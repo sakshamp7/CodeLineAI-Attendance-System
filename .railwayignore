@@ -9,6 +9,3 @@ encodings.pkl
 attendance.json
 devices.json
 database.db
-*.jfif
-*.jpg
-*.png

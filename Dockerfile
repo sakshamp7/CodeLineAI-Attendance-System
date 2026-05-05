@@ -31,4 +31,5 @@ EXPOSE 5000
 
 # Run the app with Gunicorn
 # Using --timeout 120 because face-recognition can be heavy
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "120", "app:app"]
+# Bind to the dynamic $PORT provided by Railway (fallback to 5000)
+CMD sh -c "gunicorn --bind 0.0.0.0:${PORT:-5000} --timeout 120 app:app"

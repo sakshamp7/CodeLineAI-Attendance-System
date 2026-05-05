@@ -314,45 +314,50 @@ window.onload = function () {
     async function handleStartApp() {
         showLoader("Initializing System...");
         
-        // 1. Request Geolocation
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const userLat = pos.coords.latitude;
-                    const userLng = pos.coords.longitude;
-                    let inAllowedArea = false;
-                    for (const loc of ALLOWED_LOCATIONS) {
-                        const distance = getDistance(userLat, userLng, loc.lat, loc.lng);
-                        if (distance <= loc.radius) { inAllowedArea = true; break; }
-                    }
-                    if (inAllowedArea) {
-                        messageBox.innerHTML = "✅ Location Verified. Proceed with face check.";
-                        messageBox.classList.add("success");
-                    } else {
-                        messageBox.innerHTML = "❌ Out of allowed area. Attendance disabled.";
-                        messageBox.classList.add("error");
-                        if (submitButton) submitButton.disabled = true;
-                    }
-                    messageBox.style.display = "block";
-                },
-                (err) => {
-                    messageBox.innerHTML = "⚠️ Location blocked. Please enable it in site settings.";
-                    messageBox.style.display = "block";
-                },
-                { enableHighAccuracy: true, timeout: 5000 }
-            );
-        }
-
-        // 2. Request Camera
+        // 1. Request Camera First (Mobile browsers hate simultaneous prompts)
         try {
             await initCamera();
-            // Force playback on click
             if (video) {
                 await video.play();
                 console.log("Video playback started via click.");
             }
         } catch (e) {
-            console.error("Manual playback start failed:", e);
+            console.error("Camera initialization failed:", e);
+            hideLoader();
+            return; // Stop if camera fails
+        }
+
+        // 2. Request Geolocation Second
+        if (navigator.geolocation) {
+            await new Promise((resolve) => {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        const userLat = pos.coords.latitude;
+                        const userLng = pos.coords.longitude;
+                        let inAllowedArea = false;
+                        for (const loc of ALLOWED_LOCATIONS) {
+                            const distance = getDistance(userLat, userLng, loc.lat, loc.lng);
+                            if (distance <= loc.radius) { inAllowedArea = true; break; }
+                        }
+                        if (inAllowedArea) {
+                            messageBox.innerHTML = "✅ Location Verified. Proceed with face check.";
+                            messageBox.classList.add("success");
+                        } else {
+                            messageBox.innerHTML = "❌ Out of allowed area. Attendance disabled.";
+                            messageBox.classList.add("error");
+                            if (submitButton) submitButton.disabled = true;
+                        }
+                        messageBox.style.display = "block";
+                        resolve();
+                    },
+                    (err) => {
+                        messageBox.innerHTML = "⚠️ Location blocked. Please enable it in site settings.";
+                        messageBox.style.display = "block";
+                        resolve();
+                    },
+                    { enableHighAccuracy: true, timeout: 5000 }
+                );
+            });
         }
         
         hideLoader();
@@ -380,15 +385,11 @@ window.onload = function () {
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { 
-                    facingMode: 'user',
-                    width: { ideal: 640 },
-                    height: { ideal: 480 }
-                } 
+                video: { facingMode: 'user' } // Removed strict width/height to avoid mobile constraint errors
             });
             video.srcObject = stream;
-            video.setAttribute('playsinline', ''); 
-            video.setAttribute('muted', '');
+            video.setAttribute('playsinline', 'true'); // Required for iOS Safari
+            video.setAttribute('muted', 'true');
             video.muted = true; // Extra safety for mobile auto-play
             
             // Try playing immediately
@@ -717,6 +718,11 @@ window.onload = function () {
     // (initCamera was moved to top of onload)
 
 
+    let isLivenessActive = false;
+    let livenessAttempts = 0;
+    let MAX_LIVENESS_ATTEMPTS = 30; // ~18 seconds total
+    let livenessInterval = null;
+
     function startLivenessSequence() {
         if (isLivenessActive) return;
         
@@ -764,7 +770,7 @@ window.onload = function () {
                 // Potential black frame
                 livenessStatus.innerText = "ADJUSTING CAMERA...";
             } else {
-                livenessStatus.innerText = isBlinkStep ? "PLEASE BLINK" : "STAY STILL...";
+                livenessStatus.innerText = "PLEASE BLINK";
             }
 
             try {
